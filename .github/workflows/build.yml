@@ -19,12 +19,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-      continue-on-error: true
-
     - name: Build with Gradle
-      run: ./gradlew assembleRelease
+      # 直接使用环境预装的 gradle 命令，避开缺失的 gradlew
+      run: gradle assembleRelease
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
