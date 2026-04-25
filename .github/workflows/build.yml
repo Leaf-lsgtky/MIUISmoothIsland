@@ -20,11 +20,12 @@ jobs:
         cache: gradle
 
     - name: Build with Gradle
-      # 直接使用环境预装的 gradle 命令，避开缺失的 gradlew
-      run: gradle assembleRelease
+      # 改用 assembleDebug，这样会自动完成签名
+      run: gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: SmoothIsland-Release
-        path: app/build/outputs/apk/release/*.apk
+        name: SmoothIsland-Debug-Signed
+        # 更新路径以匹配 Debug 输出
+        path: app/build/outputs/apk/debug/*.apk
