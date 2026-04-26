@@ -16,27 +16,48 @@ public class XposedInit implements IXposedHookLoadPackage {
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.equals(SYSTEMUI_PKG)) return;
 
-        XposedBridge.log(TAG + "Square Test Hooking...");
+        XposedBridge.log(TAG + "Applying Geometric Bypass Patch...");
 
-        // 验证性 Hook：将所有圆角强制设为 0 (变成直角正方形)
+        // 核心 Hook：绕过 libhwui.so 的比例校验
         XposedHelpers.findAndHookMethod(Outline.class, "setRoundRect", 
             int.class, int.class, int.class, int.class, float.class, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                // 将 radius 参数设为 0
-                param.args[4] = 0.0f;
+                int left = (int) param.args[0];
+                int top = (int) param.args[1];
+                int right = (int) param.args[2];
+                int bottom = (int) param.args[3];
+                float radius = (float) param.args[4];
+
+                int width = right - left;
+                int height = bottom - top;
+
+                if (width <= 0 || height <= 0) return;
+
+                // 算法逻辑：根据 SO 分析，若 2*R >= Width 或 2*R >= Height，会回退到普通圆角
+                // 我们强制让半径减小 1 像素，确保满足 2*R < Width 和 2*R < Height
+                float maxAllowedRadius = Math.min(width, height) / 2.0f - 1.0f;
+                
+                if (radius > maxAllowedRadius) {
+                    param.args[4] = maxAllowedRadius;
+                    // XposedBridge.log(TAG + "Radius adjusted to bypass check: " + maxAllowedRadius);
+                }
             }
         });
-        
-        // 同时确保 View 层的裁剪也生效
+
+        // 激活 View 的平滑标志位 (开启底层 Shader)
         XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 View view = (View) param.thisObject;
-                String name = view.getClass().getName();
-                if (name.contains("Island") || name.contains("MiuiStatusIcon")) {
-                    view.setClipToOutline(true);
-                    view.invalidate();
+                String className = view.getClass().getName();
+
+                if (className.contains("DynamicIsland") || className.contains("MiuiStatusIconContainer")) {
+                    try {
+                        XposedHelpers.callMethod(view, "setSmoothCornerEnabled", true);
+                        view.setClipToOutline(true);
+                        view.invalidate();
+                    } catch (Throwable ignored) {}
                 }
             }
         });
