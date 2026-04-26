@@ -1,7 +1,6 @@
 package com.example.smoothisland;
 
 import android.view.View;
-import android.graphics.RenderNode;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -16,9 +15,9 @@ public class XposedInit implements IXposedHookLoadPackage {
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.equals(SYSTEMUI_PKG)) return;
 
-        XposedBridge.log(TAG + "Injecting MiWindowCorner Strategy...");
+        XposedBridge.log(TAG + "Module loaded, applying fixes...");
 
-        // 1. Hook View 附加过程
+        // 1. Hook View 挂载过程
         XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -31,7 +30,7 @@ public class XposedInit implements IXposedHookLoadPackage {
             }
         });
 
-        // 2. Hook 核心动画更新，确保每次半径变化都同步给 MiWindowCorner
+        // 2. Hook 宿主包核心动画更新逻辑
         try {
             XposedHelpers.findAndHookMethod(
                 "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController",
@@ -46,6 +45,7 @@ public class XposedInit implements IXposedHookLoadPackage {
                         float radius = XposedHelpers.getFloatField(animator, "animRadius");
 
                         if (fakeView != null) {
+                            // 同步更新窗口级圆角参数
                             applyMiWindowCorner(fakeView, radius);
                         }
                     }
@@ -56,30 +56,37 @@ public class XposedInit implements IXposedHookLoadPackage {
 
     private void applyMiWindowSmooth(View view) {
         try {
+            // 反射调用 View 的隐藏方法
             XposedHelpers.callMethod(view, "setSmoothCornerEnabled", true);
-            // 尝试获取当前半径并应用
             float radius = view.getHeight() / 2.0f;
-            if (radius > 0) applyMiWindowCorner(view, radius);
+            if (radius > 0) {
+                applyMiWindowCorner(view, radius);
+            }
         } catch (Throwable ignored) {}
     }
 
     /**
-     * 核心：直接调用 SO 中发现的 RenderNode.setMiWindowCornerRadii
+     * 核心：通过全反射调用 RenderNode 的隐藏方法，避免编译失败
      */
     private void applyMiWindowCorner(View view, float radius) {
         try {
-            RenderNode node = view.updateDisplayListIfDirty();
-            float[] radii = new float[]{radius, radius, radius, radius, radius, radius, radius, radius};
+            // 1. 通过反射调用隐藏的 updateDisplayListIfDirty 获取 RenderNode 对象
+            Object renderNode = XposedHelpers.callMethod(view, "updateDisplayListIfDirty");
             
-            // 直接反射调用 RenderNode 的隐藏方法 (对应 SO 里的 JNI 导出)
-            XposedHelpers.callMethod(node, "setMiWindowCornerRadii", radii);
-            
-            // XposedBridge.log(TAG + "Applied MiWindowCornerRadii: " + radius);
+            if (renderNode != null) {
+                // 2. 准备 Radii 数组 (8个参数分别对应 4个角的 x,y 半径)
+                float[] radii = new float[]{radius, radius, radius, radius, radius, radius, radius, radius};
+                
+                // 3. 反射调用 RenderNode.setMiWindowCornerRadii (我们在 libhwui.so 中发现的函数)
+                // 注意：在调用带数组参数的方法时，需强转为 Object 以防被识别为可变参数
+                XposedHelpers.callMethod(renderNode, "setMiWindowCornerRadii", (Object) radii);
+            }
             view.invalidate();
         } catch (Throwable t) {
-            // 如果方法不在 RenderNode 上，尝试在 View 上查找
+            // 如果 RenderNode 方案失败，尝试直接在 View 上寻找该方法（某些 MIUI 版本的变体）
             try {
-                XposedHelpers.callMethod(view, "setMiWindowCornerRadii", new float[]{radius, radius, radius, radius, radius, radius, radius, radius});
+                float[] radii = new float[]{radius, radius, radius, radius, radius, radius, radius, radius};
+                XposedHelpers.callMethod(view, "setMiWindowCornerRadii", (Object) radii);
             } catch (Throwable ignored) {}
         }
     }
