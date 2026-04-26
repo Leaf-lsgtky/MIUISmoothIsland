@@ -1,7 +1,7 @@
 package com.example.smoothisland;
 
-import android.graphics.Outline;
 import android.view.View;
+import android.graphics.RenderNode;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -16,50 +16,71 @@ public class XposedInit implements IXposedHookLoadPackage {
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.equals(SYSTEMUI_PKG)) return;
 
-        XposedBridge.log(TAG + "Applying Geometric Bypass Patch...");
+        XposedBridge.log(TAG + "Injecting MiWindowCorner Strategy...");
 
-        // 核心 Hook：绕过 libhwui.so 的比例校验
-        XposedHelpers.findAndHookMethod(Outline.class, "setRoundRect", 
-            int.class, int.class, int.class, int.class, float.class, new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                int left = (int) param.args[0];
-                int top = (int) param.args[1];
-                int right = (int) param.args[2];
-                int bottom = (int) param.args[3];
-                float radius = (float) param.args[4];
-
-                int width = right - left;
-                int height = bottom - top;
-
-                if (width <= 0 || height <= 0) return;
-
-                // 算法逻辑：根据 SO 分析，若 2*R >= Width 或 2*R >= Height，会回退到普通圆角
-                // 我们强制让半径减小 1 像素，确保满足 2*R < Width 和 2*R < Height
-                float maxAllowedRadius = Math.min(width, height) / 2.0f - 1.0f;
-                
-                if (radius > maxAllowedRadius) {
-                    param.args[4] = maxAllowedRadius;
-                    // XposedBridge.log(TAG + "Radius adjusted to bypass check: " + maxAllowedRadius);
-                }
-            }
-        });
-
-        // 激活 View 的平滑标志位 (开启底层 Shader)
+        // 1. Hook View 附加过程
         XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 View view = (View) param.thisObject;
-                String className = view.getClass().getName();
+                String name = view.getClass().getName();
 
-                if (className.contains("DynamicIsland") || className.contains("MiuiStatusIconContainer")) {
-                    try {
-                        XposedHelpers.callMethod(view, "setSmoothCornerEnabled", true);
-                        view.setClipToOutline(true);
-                        view.invalidate();
-                    } catch (Throwable ignored) {}
+                if (name.contains("Island") || name.contains("MiuiStatusIcon")) {
+                    applyMiWindowSmooth(view);
                 }
             }
         });
+
+        // 2. Hook 核心动画更新，确保每次半径变化都同步给 MiWindowCorner
+        try {
+            XposedHelpers.findAndHookMethod(
+                "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController",
+                lpparam.classLoader,
+                "updateFakeViewOutline",
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        Object controller = param.thisObject;
+                        View fakeView = (View) XposedHelpers.getObjectField(controller, "fakeView");
+                        Object animator = XposedHelpers.getObjectField(controller, "dynamicWindowAnimator");
+                        float radius = XposedHelpers.getFloatField(animator, "animRadius");
+
+                        if (fakeView != null) {
+                            applyMiWindowCorner(fakeView, radius);
+                        }
+                    }
+                }
+            );
+        } catch (Throwable ignored) {}
+    }
+
+    private void applyMiWindowSmooth(View view) {
+        try {
+            XposedHelpers.callMethod(view, "setSmoothCornerEnabled", true);
+            // 尝试获取当前半径并应用
+            float radius = view.getHeight() / 2.0f;
+            if (radius > 0) applyMiWindowCorner(view, radius);
+        } catch (Throwable ignored) {}
+    }
+
+    /**
+     * 核心：直接调用 SO 中发现的 RenderNode.setMiWindowCornerRadii
+     */
+    private void applyMiWindowCorner(View view, float radius) {
+        try {
+            RenderNode node = view.updateDisplayListIfDirty();
+            float[] radii = new float[]{radius, radius, radius, radius, radius, radius, radius, radius};
+            
+            // 直接反射调用 RenderNode 的隐藏方法 (对应 SO 里的 JNI 导出)
+            XposedHelpers.callMethod(node, "setMiWindowCornerRadii", radii);
+            
+            // XposedBridge.log(TAG + "Applied MiWindowCornerRadii: " + radius);
+            view.invalidate();
+        } catch (Throwable t) {
+            // 如果方法不在 RenderNode 上，尝试在 View 上查找
+            try {
+                XposedHelpers.callMethod(view, "setMiWindowCornerRadii", new float[]{radius, radius, radius, radius, radius, radius, radius, radius});
+            } catch (Throwable ignored) {}
+        }
     }
 }
