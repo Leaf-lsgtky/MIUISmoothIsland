@@ -8,20 +8,18 @@ import androidx.graphics.shapes.toPath
 object PathHelper {
     @JvmStatic
     fun createSmoothPath(width: Float, height: Float, r: Float): Path {
-        // 使用 AndroidX Shapes 官方的 G2 连续性算法
+        // 使用公开 API：RoundedPolygon 构造器或预定义形状
+        // 确保使用完全公开的 API，避开 internal 构造函数
         val rounding = CornerRounding(r, 1.0f)
         
-        val polygon = RoundedPolygon(
-            numVertices = 4,
-            centerX = 0f,
-            centerY = 0f,
-            rounding = rounding,
-            innerRadius = 0f,
-            radius = r // 这里需要简化，直接构建一个多边形
+        // 使用 RoundedPolygon 的构造器来创建一个矩形
+        // 这里的参数顺序是公开 API 标准
+        val polygon = RoundedPolygon.Companion.rectangle(
+            width = width,
+            height = height,
+            rounding = rounding
         )
-        // 矩形特殊处理：AndroidX Shapes 推荐直接用 rectangle 扩展方法
-        val rectPolygon = RoundedPolygon.rectangle(width, height, rounding, rounding, rounding, rounding)
         
-        return rectPolygon.toPath()
+        return polygon.toPath()
     }
 }
