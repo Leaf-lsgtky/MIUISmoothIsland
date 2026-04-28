@@ -17,37 +17,34 @@ public class XposedInit implements IXposedHookLoadPackage {
     public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable {
         if (!lpparam.packageName.equals(SYSTEMUI_PKG)) return;
 
-        XposedBridge.log(TAG + "Manual Smooth Path Strategy active.");
+        XposedBridge.log(TAG + "G2 Continuous Path Strategy active.");
 
         // 1. 接管 Outline 裁剪逻辑
-        // 拦截 setRoundRect 并将其替换为我们手动计算的平滑 Path
         XposedHelpers.findAndHookMethod(Outline.class, "setRoundRect", 
             int.class, int.class, int.class, int.class, float.class, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                Outline outline = (Outline) param.thisObject;
                 int left = (int) param.args[0];
                 int top = (int) param.args[1];
                 int right = (int) param.args[2];
                 int bottom = (int) param.args[3];
-                float radius = (float) param.args[4];
-
-                // 如果半径极小（接近直角），则不干预
-                if (radius < 5) return;
-
-                // 核心：生成手动计算的平滑圆角路径 (Squircle)
-                Path squirclePath = createSmoothRectPath(left, top, right, bottom, radius);
                 
-                // 将 Outline 设置为 Path 模式
-                // 这样系统会按照我们定义的贝塞尔曲线进行裁剪
-                outline.setPath(squirclePath);
+                int height = bottom - top;
+                if (height <= 0) return;
+
+                // 强制实现 iOS 满圆胶囊感：半径为高度的一半
+                float r = height / 2.0f;
+
+                // 使用三段式贝塞尔曲线实现 G2 连续性（iOS 风格）
+                Path path = createIosFullSmoothPath(left, top, right, bottom, r);
                 
-                // 阻止原有的 setRoundRect 执行，防止它覆盖我们的 Path
+                Outline outline = (Outline) param.thisObject;
+                outline.setPath(path);
                 param.setResult(null);
             }
         });
 
-        // 2. 确保相关 View 开启了硬件加速裁剪
+        // 2. 激活 View 层的平滑支持
         XposedHelpers.findAndHookMethod(View.class, "onAttachedToWindow", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -55,9 +52,8 @@ public class XposedInit implements IXposedHookLoadPackage {
                 String name = view.getClass().getName();
                 if (name.contains("Island") || name.contains("MiuiStatusIcon")) {
                     view.setClipToOutline(true);
-                    // 禁用系统可能的原生平滑开关，避免冲突
                     try { 
-                        XposedHelpers.callMethod(view, "setSmoothCornerEnabled", false); 
+                        XposedHelpers.callMethod(view, "setSmoothCornerEnabled", true); 
                     } catch (Throwable ignored) {}
                 }
             }
@@ -65,50 +61,50 @@ public class XposedInit implements IXposedHookLoadPackage {
     }
 
     /**
-     * 手动生成平滑圆角矩形路径 (Squircle 近似算法)
-     * 使用三阶贝塞尔曲线，曲率比例 c 设为 0.72f 左右，能获得类似 HyperOS 的视觉饱满感
+     * 实现真正的 iOS 风格 G2 连续性圆角 (三段式贝塞尔逼近)
+     * 这种算法让圆角与直线的连接处曲率变化为 0，视觉效果极其平滑且饱满
      */
-    private Path createSmoothRectPath(int left, int top, int right, int bottom, float radius) {
+    private Path createIosFullSmoothPath(int left, int top, int right, int bottom, float r) {
         Path path = new Path();
         float w = right - left;
         float h = bottom - top;
         
-        // 限制半径不超过最小边的一半
-        float r = Math.min(radius, Math.min(w, h) / 2f);
-
-        // 平滑系数：
-        // 0.55228f 是标准圆弧
-        // 0.72f 左右能达到明显的超椭圆平滑感
-        float c = r * 0.72f; 
+        // iOS 7+ 连续圆角核心常数
+        // 这里的比例确保了从直线到曲线的平滑过渡
+        final float L = 1.528665f * r;
+        final float c1 = 0.169060f * r;
+        final float c2 = 0.372824f * r;
+        final float c3 = 0.074911f * r;
+        final float c4 = 0.631494f * r;
+        final float c5 = 0.868407f * r;
+        final float c6 = 1.088493f * r;
 
         path.reset();
-        // 从左上角圆角终点顺时针绘制
-        path.moveTo(left + r, top);
         
-        // 顶部边
-        path.lineTo(right - r, top);
+        // 1. 右上角
+        path.moveTo(right - L, top);
+        path.cubicTo(right - c6, top, right - c5, top, right - c4, top + c3);
+        path.cubicTo(right - c2, top + c1, right - c1, top + c2, right - c3, top + c4);
+        path.cubicTo(right, top + c5, right, top + c6, right, top + r);
         
-        // 右上角平滑曲线
-        path.cubicTo(right - r + c, top, right, top + r - c, right, top + r);
-        
-        // 右侧边
+        // 2. 右下角
         path.lineTo(right, bottom - r);
+        path.cubicTo(right, bottom - c6, right, bottom - c5, right - c3, bottom - c4);
+        path.cubicTo(right - c1, bottom - c2, right - c2, bottom - c1, right - c4, bottom - c3);
+        path.cubicTo(right - c5, bottom, right - c6, bottom, right - L, bottom);
         
-        // 右下角平滑曲线
-        path.cubicTo(right, bottom - r + c, right - r + c, bottom, right - r, bottom);
+        // 3. 左下角
+        path.lineTo(left + L, bottom);
+        path.cubicTo(left + c6, bottom, left + c5, bottom, left + c4, bottom - c3);
+        path.cubicTo(left + c2, bottom - c1, left + c1, bottom - c2, left + c3, bottom - c4);
+        path.cubicTo(left, bottom - c5, left, bottom - c6, left, bottom - r);
         
-        // 底部边
-        path.lineTo(left + r, bottom);
-        
-        // 左下角平滑曲线
-        path.cubicTo(left + r - c, bottom, left, bottom - r + c, left, bottom - r);
-        
-        // 左侧边
+        // 4. 左上角
         path.lineTo(left, top + r);
-        
-        // 左上角平滑曲线
-        path.cubicTo(left, top + r - c, left + r - c, top, left + r, top);
-        
+        path.cubicTo(left, top + c6, left, top + c5, left + c3, top + c4);
+        path.cubicTo(left + c1, top + c2, left + c2, top + c1, left + c4, top + c3);
+        path.cubicTo(left + c5, top, left + c6, top, left + L, top);
+
         path.close();
         return path;
     }
