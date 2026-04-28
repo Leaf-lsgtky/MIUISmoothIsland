@@ -1,10 +1,10 @@
 package com.example.smoothisland
 
+import android.graphics.Matrix
 import android.graphics.Outline
 import android.graphics.Path
 import android.graphics.Rect
 import android.view.View
-import android.view.ViewOutlineProvider
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -15,34 +15,30 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 class XposedInit : IXposedHookLoadPackage {
-    companion object {
-        private const val TAG = "SmoothIsland: "
-        private const val SYSTEMUI_PKG = "com.android.systemui"
-    }
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        if (lpparam.packageName != SYSTEMUI_PKG) return
+        if (lpparam.packageName != "com.android.systemui") return
 
-        XposedBridge.log(TAG + "Kotlin-Native AndroidX Shapes Strategy active.")
+        XposedBridge.log("SmoothIsland: Kotlin-Native AndroidX Strategy active.")
 
         try {
-            val targetProvider = XposedHelpers.findClass(
+            val targetClass = XposedHelpers.findClass(
                 "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController\$updateFakeViewOutline\$1",
                 lpparam.classLoader
             )
 
-            XposedHelpers.findAndHookMethod(targetProvider, "getOutline", View::class.java, Outline::class.java, object : XC_MethodHook() {
+            XposedHelpers.findAndHookMethod(targetClass, "getOutline", View::class.java, Outline::class.java, object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val outline = param.args[1] as Outline
-                    overrideWithAndroidXShapes(outline)
+                    applySmoothOutline(outline)
                 }
             })
         } catch (t: Throwable) {
-            XposedBridge.log(TAG + "Target Provider Class not found: " + t.message)
+            XposedBridge.log("SmoothIsland: Target Provider not found, skip.")
         }
     }
 
-    private fun overrideWithAndroidXShapes(outline: Outline) {
+    private fun applySmoothOutline(outline: Outline) {
         try {
             val radius = XposedHelpers.callMethod(outline, "getRadius") as Float
             val bounds = XposedHelpers.callMethod(outline, "getBounds") as Rect
@@ -51,8 +47,7 @@ class XposedInit : IXposedHookLoadPackage {
                 val r = bounds.height() / 2.0f
                 val path = generateSmoothPath(bounds.width().toFloat(), bounds.height().toFloat(), r)
                 
-                // 平移 Path 到原点
-                val matrix = android.graphics.Matrix()
+                val matrix = Matrix()
                 matrix.setTranslate(bounds.left.toFloat() + bounds.width() / 2f, bounds.top.toFloat() + bounds.height() / 2f)
                 path.transform(matrix)
                 
