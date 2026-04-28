@@ -31,15 +31,7 @@ android {
 }
 
 dependencies {
-    // 强制使用 compileOnly 以确保 Xposed API 不被打包，避免潜在冲突
     compileOnly 'de.robv.android.xposed:api:82'
-    
-    // 使用 implementation，但排除可能产生冲突的 transitive 依赖
-    implementation ("androidx.graphics:graphics-shapes:1.0.0-beta01") {
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-    }
-    
-    // 确保使用最新的 stdlib
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
+    implementation "androidx.graphics:graphics-shapes:1.0.0-beta01"
     implementation "androidx.core:core-ktx:1.12.0"
 }
