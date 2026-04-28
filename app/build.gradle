@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    // 添加 Kotlin 支持，以便正确调用 AndroidX Shapes 的 API
     id 'org.jetbrains.kotlin.android'
 }
 
@@ -37,8 +36,8 @@ dependencies {
     // AndroidX Shapes 库
     implementation "androidx.graphics:graphics-shapes:1.0.0-beta01"
     
-    // Kotlin 标准库（Shapes 库的运行基础）
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.20"
+    // 升级 Kotlin 标准库至 2.0.21
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
     
     implementation "androidx.core:core-ktx:1.12.0"
 }

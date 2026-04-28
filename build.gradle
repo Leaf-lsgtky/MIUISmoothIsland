@@ -6,8 +6,8 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.2.0'
-        // 添加 Kotlin 插件依赖
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.20"
+        // 升级 Kotlin 插件至 2.0.21 以兼容 Gradle 9+
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21"
     }
 }
 
