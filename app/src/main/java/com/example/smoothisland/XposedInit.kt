@@ -58,7 +58,18 @@ class XposedInit : IXposedHookLoadPackage {
 
     private fun generateSmoothPath(width: Float, height: Float, r: Float): Path {
         val rounding = CornerRounding(r, 1.0f)
-        val polygon = RoundedPolygon.rectangle(width, height, rounding, rounding, rounding, rounding)
+        
+        // 使用 RoundedPolygon 的顶点构造器，这是所有版本都稳定的 Public API
+        val polygon = RoundedPolygon(
+            vertices = floatArrayOf(
+                -width / 2f, -height / 2f,
+                width / 2f, -height / 2f,
+                width / 2f, height / 2f,
+                -width / 2f, height / 2f
+            ),
+            rounding = rounding
+        )
+        
         return polygon.toPath()
     }
 }
