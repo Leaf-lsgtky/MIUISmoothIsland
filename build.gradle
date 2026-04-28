@@ -5,8 +5,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.0'
-        // 升级 Kotlin 插件至 2.0.21 以兼容 Gradle 9+
+        // 显式指定版本 8.6.0，这是 Google 推荐的 Gradle 9.x 稳定适配版
+        classpath 'com.android.tools.build:gradle:8.6.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21"
     }
 }

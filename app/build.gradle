@@ -36,8 +36,6 @@ dependencies {
     // AndroidX Shapes 库
     implementation "androidx.graphics:graphics-shapes:1.0.0-beta01"
     
-    // 升级 Kotlin 标准库至 2.0.21
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
-    
+    // 基础核心库
     implementation "androidx.core:core-ktx:1.12.0"
 }
