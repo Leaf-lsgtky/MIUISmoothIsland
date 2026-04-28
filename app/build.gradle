@@ -28,4 +28,10 @@ android {
 
 dependencies {
     compileOnly 'de.robv.android.xposed:api:82'
+    
+    // 直接引入 AndroidX Shapes 库
+    implementation "androidx.graphics:graphics-shapes:1.0.0-beta01"
+    
+    // 同时也需要引其依赖的核心库
+    implementation "androidx.core:core-ktx:1.12.0"
 }
