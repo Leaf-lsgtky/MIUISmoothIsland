@@ -5,9 +5,6 @@ import android.graphics.Outline;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.view.View;
-import androidx.graphics.shapes.CornerRounding;
-import androidx.graphics.shapes.RoundedPolygon;
-import androidx.graphics.shapes.ShapesKt;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -86,26 +83,10 @@ public class XposedInit implements IXposedHookLoadPackage {
         float width = (float) (right - left);
         float height = (float) (bottom - top);
         
-        // 1. 创建平滑圆角配置。smoothing = 1.0f 提供最完美的 G2 连续性
-        CornerRounding rounding = new CornerRounding(r, 1.0f);
+        // 调用 Kotlin 辅助工具类，避免 Java 直接调用 Kotlin 的扩展函数和默认参数
+        Path path = PathHelper.createSmoothPath(width, height, r);
         
-        // 2. 创建一个圆角矩形多边形
-        // 注意：RoundedPolygon.rectangle 默认以 (0,0) 为中心
-        RoundedPolygon polygon = RoundedPolygon.rectangle(
-            width, 
-            height, 
-            rounding, 
-            rounding, 
-            rounding, 
-            rounding, 
-            0f, 0f // 内部中心点偏移
-        );
-        
-        // 3. 转换为 Android Path
-        Path path = ShapesKt.toPath(polygon, null);
-        
-        // 4. 平移 Path 到正确的位置 (left, top)
-        // 因为 RoundedPolygon.rectangle 是居中的，所以需要平移到原点再平移到指定位置
+        // 平移 Path 到指定位置
         Matrix matrix = new Matrix();
         matrix.setTranslate(left + width / 2f, top + height / 2f);
         path.transform(matrix);
