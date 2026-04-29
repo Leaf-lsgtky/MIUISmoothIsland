@@ -19,8 +19,12 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    - name: set up Gradle 9.1.0
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '9.1.0'
+
     - name: Build with Gradle
-      # 改用 assembleDebug，这样会自动完成签名
       run: gradle assembleDebug
 
     - name: Upload APK
