@@ -6,3 +6,7 @@
 
 -keep class de.robv.android.xposed.** { *; }
 -dontwarn de.robv.android.xposed.**
+
+# The module entry point is loaded by class name from assets/xposed_init.
+-keep class com.example.smoothisland.XposedInit { *; }
+-keep class * implements de.robv.android.xposed.IXposedHookLoadPackage { *; }
