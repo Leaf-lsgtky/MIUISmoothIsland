@@ -130,7 +130,7 @@ class XposedInit : IXposedHookLoadPackage {
     private companion object {
         const val TAG = "SmoothIsland: "
         const val SYSTEMUI_PKG = "com.android.systemui"
-        const val PILL_SMOOTHING = 0.4f
+        const val PILL_SMOOTHING = 0.8f
         const val MAX_PATH_CACHE_SIZE = 32
         val capsulePathCache = LinkedHashMap<CapsuleSize, Path>(MAX_PATH_CACHE_SIZE, 0.75f, true)
     }
