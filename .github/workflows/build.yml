@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ALIAS: ${{ secrets.ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
     steps:
     - uses: actions/checkout@v4
     
@@ -24,12 +28,32 @@ jobs:
       with:
         gradle-version: '9.1.0'
 
-    - name: Build with Gradle
+    - name: Decode release keystore
+      if: ${{ secrets.SIGNING_KEY != '' }}
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      run: |
+        printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+        echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+    - name: Build release APK
+      if: ${{ secrets.SIGNING_KEY != '' }}
+      run: gradle assembleRelease
+
+    - name: Build debug APK
+      if: ${{ secrets.SIGNING_KEY == '' }}
       run: gradle assembleDebug
 
-    - name: Upload APK
+    - name: Upload release APK
+      if: ${{ secrets.SIGNING_KEY != '' }}
       uses: actions/upload-artifact@v4
       with:
-        name: SmoothIsland-Debug-Signed
-        # 更新路径以匹配 Debug 输出
+        name: SmoothIsland-Release-Signed
+        path: app/build/outputs/apk/release/*.apk
+
+    - name: Upload debug APK
+      if: ${{ secrets.SIGNING_KEY == '' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: SmoothIsland-Debug
         path: app/build/outputs/apk/debug/*.apk
