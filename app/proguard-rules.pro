@@ -4,9 +4,6 @@
 # You can edit the include path and order by changing the proguardFiles
 # directive in build.gradle.
 
--keep class de.robv.android.xposed.** { *; }
--dontwarn de.robv.android.xposed.**
-
-# The module entry point is loaded by class name from assets/xposed_init.
+# The module entry point is loaded by class name from META-INF/xposed/java_init.list.
 -keep class com.example.smoothisland.XposedInit { *; }
--keep class * implements de.robv.android.xposed.IXposedHookLoadPackage { *; }
+-keep class * extends io.github.libxposed.api.XposedModule { *; }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MIUI Super Island Smooth Corner</string>
+    <string name="module_description">Force enable smooth corners (Squircle) for MIUI Dynamic Island.</string>
+</resources>
