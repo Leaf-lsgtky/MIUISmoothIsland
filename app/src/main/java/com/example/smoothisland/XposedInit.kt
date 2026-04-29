@@ -9,7 +9,6 @@ import androidx.graphics.shapes.pill
 import androidx.graphics.shapes.toPath
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import kotlin.math.abs
@@ -17,8 +16,6 @@ import kotlin.math.abs
 class XposedInit : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != SYSTEMUI_PKG) return
-
-        XposedBridge.log(TAG + "AndroidX Shapes capsule strategy active.")
 
         try {
             val targetProvider = XposedHelpers.findClass(
@@ -38,9 +35,7 @@ class XposedInit : IXposedHookLoadPackage {
                     }
                 }
             )
-            XposedBridge.log(TAG + "Successfully hooked targeted Island OutlineProvider.")
-        } catch (t: Throwable) {
-            XposedBridge.log(TAG + "Targeted Provider Class not found, using geometric filtering only.")
+        } catch (_: Throwable) {
         }
 
         XposedHelpers.findAndHookMethod(
@@ -128,7 +123,6 @@ class XposedInit : IXposedHookLoadPackage {
     }
 
     private companion object {
-        const val TAG = "SmoothIsland: "
         const val SYSTEMUI_PKG = "com.android.systemui"
         const val PILL_SMOOTHING = 0.8f
         const val MAX_PATH_CACHE_SIZE = 32
