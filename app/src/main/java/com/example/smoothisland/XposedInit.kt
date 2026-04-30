@@ -57,7 +57,8 @@ class XposedInit : XposedModule() {
 
     @Synchronized
     private fun getBaseCapsulePath(width: Int, height: Int): Path {
-        val key = CapsuleSize(width, height)
+        val smoothing = readSmoothing()
+        val key = CapsuleShape(width, height, smoothing)
         val cachedPath = capsulePathCache[key]
         if (cachedPath != null) {
             return Path(cachedPath)
@@ -66,7 +67,7 @@ class XposedInit : XposedModule() {
         val generatedPath = RoundedPolygon.pill(
             width = width.toFloat(),
             height = height.toFloat(),
-            smoothing = PILL_SMOOTHING
+            smoothing = smoothing
         ).toPath()
 
         if (capsulePathCache.size >= MAX_PATH_CACHE_SIZE) {
@@ -75,6 +76,26 @@ class XposedInit : XposedModule() {
         }
         capsulePathCache[key] = generatedPath
         return Path(generatedPath)
+    }
+
+    private fun readSmoothing(): Float {
+        val rawValue = getSystemProperty(SMOOTHING_PROP, DEFAULT_SMOOTHING.toString())
+        val parsedValue = rawValue.toFloatOrNull() ?: DEFAULT_SMOOTHING
+        return parsedValue.coerceIn(MIN_SMOOTHING, MAX_SMOOTHING)
+    }
+
+    private fun getSystemProperty(key: String, defaultValue: String): String {
+        return try {
+            val systemProperties = Class.forName("android.os.SystemProperties")
+            val getMethod = systemProperties.getMethod(
+                "get",
+                String::class.java,
+                String::class.java
+            )
+            getMethod.invoke(null, key, defaultValue) as String
+        } catch (_: Throwable) {
+            defaultValue
+        }
     }
 
     @Synchronized
@@ -142,14 +163,17 @@ class XposedInit : XposedModule() {
         const val SYSTEMUI_PKG = "com.android.systemui"
         const val TARGET_PROVIDER_CLASS =
             "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController\$updateFakeViewOutline\$1"
-        const val PILL_SMOOTHING = 0.8f
+        const val SMOOTHING_PROP = "persist.smoothisland.smoothing"
+        const val DEFAULT_SMOOTHING = 0.8f
+        const val MIN_SMOOTHING = 0.0f
+        const val MAX_SMOOTHING = 1.0f
         const val MAX_PATH_CACHE_SIZE = 32
-        val capsulePathCache = LinkedHashMap<CapsuleSize, Path>(MAX_PATH_CACHE_SIZE, 0.75f, true)
+        val capsulePathCache = LinkedHashMap<CapsuleShape, Path>(MAX_PATH_CACHE_SIZE, 0.75f, true)
         @Volatile
         var hooksInstalled = false
         @Volatile
         var loadedProcessName: String? = null
     }
 
-    private data class CapsuleSize(val width: Int, val height: Int)
+    private data class CapsuleShape(val width: Int, val height: Int, val smoothing: Float)
 }
