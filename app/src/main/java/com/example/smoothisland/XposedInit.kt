@@ -24,8 +24,7 @@ class XposedInit : XposedModule() {
         if (!processName.startsWith(SYSTEMUI_PKG)) return
         if (param.packageName != SYSTEMUI_PKG && param.packageName != PLUGIN_PKG) return
 
-        // libxposed log: log(String message) defaults to INFO
-        log("SmoothIsland: Loading hooks for ${param.packageName} in $processName")
+        log(LOG_INFO, "SmoothIsland", "Loading hooks for ${param.packageName} in $processName")
         installHooks(param.defaultClassLoader)
     }
 
@@ -104,6 +103,7 @@ class XposedInit : XposedModule() {
     @Synchronized
     private fun installHooks(classLoader: ClassLoader) {
         if (hooksInstalled) return
+        log(LOG_INFO, "SmoothIsland", "Installing hooks...")
 
         hookOutlineRoundRect()
         hookTargetOutlineProvider(classLoader)
@@ -136,12 +136,13 @@ class XposedInit : XposedModule() {
                     if (height > 10f && abs(width / height) > 1.5f) {
                         result.reset()
                         result.addRect(0f, 0f, width, height, Path.Direction.CW)
-                        log("SmoothIsland: Forced rectangle path for ${width}x${height} in ${loadedProcessName}")
+                        log(LOG_INFO, "SmoothIsland", "Forced rectangle path for ${width}x${height} in ${loadedProcessName}")
                     }
                     result
                 }
+            log(LOG_INFO, "SmoothIsland", "Successfully hooked SmoothPathProvider2")
         } catch (e: Throwable) {
-            log("SmoothIsland: Failed to hook SmoothPathProvider2: ${e.message}")
+            log(LOG_ERROR, "SmoothIsland", "Failed to hook SmoothPathProvider2: ${e.message}")
         }
     }
 
@@ -162,39 +163,46 @@ class XposedInit : XposedModule() {
                     overrideOutlineIfCapsule(outline)
                     result
                 }
-        } catch (_: Throwable) {
+            log(LOG_INFO, "SmoothIsland", "Successfully hooked TargetOutlineProvider")
+        } catch (e: Throwable) {
+            log(LOG_ERROR, "SmoothIsland", "Failed to hook TargetOutlineProvider: ${e.message}")
         }
     }
 
     private fun hookOutlineRoundRect() {
-        val setRoundRectMethod = Outline::class.java.getDeclaredMethod(
-            "setRoundRect",
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Float::class.javaPrimitiveType!!
-        )
+        try {
+            val setRoundRectMethod = Outline::class.java.getDeclaredMethod(
+                "setRoundRect",
+                Int::class.javaPrimitiveType!!,
+                Int::class.javaPrimitiveType!!,
+                Int::class.javaPrimitiveType!!,
+                Int::class.javaPrimitiveType!!,
+                Float::class.javaPrimitiveType!!
+            )
 
-        hook(setRoundRectMethod)
-            .setPriority(XposedInterface.PRIORITY_DEFAULT)
-            .intercept { chain ->
-                val left = chain.getArg(0) as Int
-                val top = chain.getArg(1) as Int
-                val right = chain.getArg(2) as Int
-                val bottom = chain.getArg(3) as Int
-                val radius = chain.getArg(4) as Float
-                val height = bottom - top
+            hook(setRoundRectMethod)
+                .setPriority(XposedInterface.PRIORITY_DEFAULT)
+                .intercept { chain ->
+                    val left = chain.getArg(0) as Int
+                    val top = chain.getArg(1) as Int
+                    val right = chain.getArg(2) as Int
+                    val bottom = chain.getArg(3) as Int
+                    val radius = chain.getArg(4) as Float
+                    val height = bottom - top
 
-                if (height > 10 && abs(radius - (height / 2.0f)) <= 1.0f) {
-                    val path = createSmoothCapsulePath(left, top, right, bottom)
-                    val outline = chain.thisObject as Outline
-                    outline.setPath(path)
-                    null
-                } else {
-                    chain.proceed()
+                    if (height > 10 && abs(radius - (height / 2.0f)) <= 1.0f) {
+                        val path = createSmoothCapsulePath(left, top, right, bottom)
+                        val outline = chain.thisObject as Outline
+                        outline.setPath(path)
+                        null
+                    } else {
+                        chain.proceed()
+                    }
                 }
-            }
+            log(LOG_INFO, "SmoothIsland", "Successfully hooked Outline.setRoundRect")
+        } catch (e: Throwable) {
+            log(LOG_ERROR, "SmoothIsland", "Failed to hook Outline.setRoundRect: ${e.message}")
+        }
     }
 
     private companion object {
@@ -207,6 +215,10 @@ class XposedInit : XposedModule() {
         const val MIN_SMOOTHING = 0.0f
         const val MAX_SMOOTHING = 1.0f
         const val MAX_PATH_CACHE_SIZE = 32
+        
+        const val LOG_INFO = 2
+        const val LOG_ERROR = 4
+        
         val capsulePathCache = LinkedHashMap<CapsuleShape, Path>(MAX_PATH_CACHE_SIZE, 0.75f, true)
         @Volatile
         var hooksInstalled = false
