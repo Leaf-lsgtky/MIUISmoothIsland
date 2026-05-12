@@ -35,13 +35,19 @@ jobs:
         printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/release.keystore"
         echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
-    - name: Build release APK
-      if: ${{ env.SIGNING_KEY != '' }}
-      run: gradle assembleRelease
+    - name: Build APKs
+      run: |
+        if [ "${{ env.SIGNING_KEY }}" != "" ]; then
+          gradle assembleRelease assembleDebug
+        else
+          gradle assembleDebug
+        fi
 
-    - name: Build debug APK
-      if: ${{ env.SIGNING_KEY == '' }}
-      run: gradle assembleDebug
+    - name: Upload debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: SmoothIsland-Debug
+        path: app/build/outputs/apk/debug/*.apk
 
     - name: Upload release APK
       if: ${{ env.SIGNING_KEY != '' }}
@@ -49,10 +55,3 @@ jobs:
       with:
         name: SmoothIsland-Release-Signed
         path: app/build/outputs/apk/release/*.apk
-
-    - name: Upload debug APK
-      if: ${{ env.SIGNING_KEY == '' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: SmoothIsland-Debug
-        path: app/build/outputs/apk/debug/*.apk

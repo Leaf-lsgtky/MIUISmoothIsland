@@ -20,9 +20,11 @@ class XposedInit : XposedModule() {
 
     override fun onPackageLoaded(param: PackageLoadedParam) {
         if (!param.isFirstPackage) return
-        if (loadedProcessName != SYSTEMUI_PKG) return
+        val processName = loadedProcessName ?: return
+        if (!processName.startsWith(SYSTEMUI_PKG)) return
         if (param.packageName != SYSTEMUI_PKG && param.packageName != PLUGIN_PKG) return
 
+        log("Loading hooks for ${param.packageName} in $processName")
         installHooks(param.defaultClassLoader)
     }
 
@@ -120,29 +122,24 @@ class XposedInit : XposedModule() {
             hook(getSmoothPathMethod)
                 .setPriority(XposedInterface.PRIORITY_DEFAULT)
                 .intercept { chain ->
-                    val result = chain.proceed()
+                    val result = chain.proceed() as Path
                     val smoothData = chain.getArg(1)
                     
-                    // Access fields using reflection since SmoothData is not in our classpath
-                    val widthField = smoothData.javaClass.getDeclaredField("width")
-                    val heightField = smoothData.javaClass.getDeclaredField("height")
-                    widthField.isAccessible = true
-                    heightField.isAccessible = true
+                    val widthField = smoothData.javaClass.getField("width")
+                    val heightField = smoothData.javaClass.getField("height")
                     
                     val width = widthField.getFloat(smoothData)
                     val height = heightField.getFloat(smoothData)
 
-                    // Target specifically the capsule-like shape (Dynamic Island normal state)
-                    // If height is around 100-200 and it's much wider than tall
                     if (height > 10f && abs(width / height) > 1.5f) {
-                        val path = chain.getArg(0) as Path
-                        path.reset()
-                        // Force a rectangle to verify we are hooking the border correctly
-                        path.addRect(0f, 0f, width, height, Path.Direction.CW)
+                        result.reset()
+                        result.addRect(0f, 0f, width, height, Path.Direction.CW)
+                        log("Forced rectangle path for ${width}x${height} in ${loadedProcessName}")
                     }
                     result
                 }
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            log("Failed to hook SmoothPathProvider2: ${e.message}")
         }
     }
 
