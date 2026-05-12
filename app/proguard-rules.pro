@@ -4,6 +4,13 @@
 # You can edit the include path and order by changing the proguardFiles
 # directive in build.gradle.
 
+# libxposed keep rules
+-keep class io.github.libxposed.api.** { *; }
+
 # The module entry point is loaded by class name from META-INF/xposed/java_init.list.
--keep class com.example.smoothisland.XposedInit { *; }
--keep class * extends io.github.libxposed.api.XposedModule { *; }
+-keep class com.example.smoothisland.XposedInit {
+    public <init>(io.github.libxposed.api.XposedInterface, io.github.libxposed.api.XposedModuleInterface$ModuleInfo);
+}
+-keep class * extends io.github.libxposed.api.XposedModule {
+    public <init>(io.github.libxposed.api.XposedInterface, io.github.libxposed.api.XposedModuleInterface$ModuleInfo);
+}

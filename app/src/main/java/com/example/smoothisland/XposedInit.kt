@@ -21,7 +21,7 @@ class XposedInit : XposedModule() {
     override fun onPackageLoaded(param: PackageLoadedParam) {
         if (!param.isFirstPackage) return
         if (loadedProcessName != SYSTEMUI_PKG) return
-        if (param.packageName != SYSTEMUI_PKG) return
+        if (param.packageName != SYSTEMUI_PKG && param.packageName != PLUGIN_PKG) return
 
         installHooks(param.defaultClassLoader)
     }
@@ -200,6 +200,7 @@ class XposedInit : XposedModule() {
 
     private companion object {
         const val SYSTEMUI_PKG = "com.android.systemui"
+        const val PLUGIN_PKG = "miui.systemui.plugin"
         const val TARGET_PROVIDER_CLASS =
             "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController\$updateFakeViewOutline\$1"
         const val SMOOTHING_PROP = "persist.smoothisland.smoothing"
