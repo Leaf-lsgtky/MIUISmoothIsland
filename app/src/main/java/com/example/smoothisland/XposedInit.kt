@@ -24,7 +24,7 @@ class XposedInit : XposedModule() {
         if (!processName.startsWith(SYSTEMUI_PKG)) return
         if (param.packageName != SYSTEMUI_PKG && param.packageName != PLUGIN_PKG) return
 
-        log("Loading hooks for ${param.packageName} in $processName")
+        log(XposedInterface.LOG_LEVEL_INFO, "SmoothIsland", "Loading hooks for ${param.packageName} in $processName")
         installHooks(param.defaultClassLoader)
     }
 
@@ -113,10 +113,11 @@ class XposedInit : XposedModule() {
     private fun hookSmoothPathProvider(classLoader: ClassLoader) {
         try {
             val smoothPathProvider = Class.forName("miuix.smooth.SmoothPathProvider2", false, classLoader)
+            val smoothDataClass = Class.forName("miuix.smooth.SmoothPathProvider2\$SmoothData", false, classLoader)
             val getSmoothPathMethod = smoothPathProvider.getDeclaredMethod(
                 "getSmoothPath",
                 Path::class.java,
-                Class.forName("miuix.smooth.SmoothPathProvider2\$SmoothData", false, classLoader)
+                smoothDataClass
             )
 
             hook(getSmoothPathMethod)
@@ -134,12 +135,12 @@ class XposedInit : XposedModule() {
                     if (height > 10f && abs(width / height) > 1.5f) {
                         result.reset()
                         result.addRect(0f, 0f, width, height, Path.Direction.CW)
-                        log("Forced rectangle path for ${width}x${height} in ${loadedProcessName}")
+                        log(XposedInterface.LOG_LEVEL_INFO, "SmoothIsland", "Forced rectangle path for ${width}x${height} in ${loadedProcessName}")
                     }
                     result
                 }
         } catch (e: Throwable) {
-            log("Failed to hook SmoothPathProvider2: ${e.message}")
+            log(XposedInterface.LOG_LEVEL_ERROR, "SmoothIsland", "Failed to hook SmoothPathProvider2: ${e.message}")
         }
     }
 
