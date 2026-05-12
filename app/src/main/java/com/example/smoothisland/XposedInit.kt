@@ -24,7 +24,8 @@ class XposedInit : XposedModule() {
         if (!processName.startsWith(SYSTEMUI_PKG)) return
         if (param.packageName != SYSTEMUI_PKG && param.packageName != PLUGIN_PKG) return
 
-        log(XposedInterface.LOG_LEVEL_INFO, "SmoothIsland", "Loading hooks for ${param.packageName} in $processName")
+        // libxposed log: log(String message) defaults to INFO
+        log("SmoothIsland: Loading hooks for ${param.packageName} in $processName")
         installHooks(param.defaultClassLoader)
     }
 
@@ -135,12 +136,12 @@ class XposedInit : XposedModule() {
                     if (height > 10f && abs(width / height) > 1.5f) {
                         result.reset()
                         result.addRect(0f, 0f, width, height, Path.Direction.CW)
-                        log(XposedInterface.LOG_LEVEL_INFO, "SmoothIsland", "Forced rectangle path for ${width}x${height} in ${loadedProcessName}")
+                        log("SmoothIsland: Forced rectangle path for ${width}x${height} in ${loadedProcessName}")
                     }
                     result
                 }
         } catch (e: Throwable) {
-            log(XposedInterface.LOG_LEVEL_ERROR, "SmoothIsland", "Failed to hook SmoothPathProvider2: ${e.message}")
+            log("SmoothIsland: Failed to hook SmoothPathProvider2: ${e.message}")
         }
     }
 
