@@ -104,7 +104,46 @@ class XposedInit : XposedModule() {
 
         hookOutlineRoundRect()
         hookTargetOutlineProvider(classLoader)
+        hookSmoothPathProvider(classLoader)
         hooksInstalled = true
+    }
+
+    private fun hookSmoothPathProvider(classLoader: ClassLoader) {
+        try {
+            val smoothPathProvider = Class.forName("miuix.smooth.SmoothPathProvider2", false, classLoader)
+            val getSmoothPathMethod = smoothPathProvider.getDeclaredMethod(
+                "getSmoothPath",
+                Path::class.java,
+                Class.forName("miuix.smooth.SmoothPathProvider2\$SmoothData", false, classLoader)
+            )
+
+            hook(getSmoothPathMethod)
+                .setPriority(XposedInterface.PRIORITY_DEFAULT)
+                .intercept { chain ->
+                    val result = chain.proceed()
+                    val smoothData = chain.getArg(1)
+                    
+                    // Access fields using reflection since SmoothData is not in our classpath
+                    val widthField = smoothData.javaClass.getDeclaredField("width")
+                    val heightField = smoothData.javaClass.getDeclaredField("height")
+                    widthField.isAccessible = true
+                    heightField.isAccessible = true
+                    
+                    val width = widthField.getFloat(smoothData)
+                    val height = heightField.getFloat(smoothData)
+
+                    // Target specifically the capsule-like shape (Dynamic Island normal state)
+                    // If height is around 100-200 and it's much wider than tall
+                    if (height > 10f && abs(width / height) > 1.5f) {
+                        val path = chain.getArg(0) as Path
+                        path.reset()
+                        // Force a rectangle to verify we are hooking the border correctly
+                        path.addRect(0f, 0f, width, height, Path.Direction.CW)
+                    }
+                    result
+                }
+        } catch (_: Throwable) {
+        }
     }
 
     private fun hookTargetOutlineProvider(classLoader: ClassLoader) {
