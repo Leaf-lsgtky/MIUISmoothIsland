@@ -5,7 +5,7 @@ SystemUI. Its goal is to make MIUI's Super Island / Dynamic Island capsule use
 a smoother, squircle-like outline instead of the default round-rect arc.
 
 The module does not provide a launcher UI. It is installed as an APK, enabled in
-LSPosed, and scoped to `com.android.systemui`.
+LSPosed, and scoped to `com.android.systemui` and `miui.systemui.plugin`.
 
 ## Current Implementation
 
@@ -33,16 +33,17 @@ The static scope is:
 app/src/main/resources/META-INF/xposed/scope.list
 ```
 
-which currently contains only:
+which currently contains:
 
 ```text
 com.android.systemui
+miui.systemui.plugin
 ```
 
 ## Hooking Model
 
-`XposedInit.kt` installs hooks only when both the loaded package and loaded
-process are `com.android.systemui`.
+`XposedInit.kt` installs host outline hooks in `com.android.systemui` and plugin
+background stroke hooks for `miui.systemui.plugin`.
 
 The module currently has two hook paths:
 
@@ -59,6 +60,13 @@ The module currently has two hook paths:
    capsule path.
 
 Both paths use the same shape-generation code.
+
+Plugin-side stroke handling is separate. `miui.systemui.plugin` draws the
+dynamic-island semi-transparent border in
+`DynamicIslandBaseContentView.updateMedianLuma(float)` by setting a stroke on
+the `DynamicIslandBackgroundView` drawable. The module lets MIUI keep its
+original stroke while geometry changes, then replaces the stable-state stroke
+with a smooth stroke drawable using the same capsule path generator.
 
 ## Smooth Capsule Generation
 
@@ -135,7 +143,7 @@ KEYSTORE_PASSWORD
 1. Build the APK with `gradle assembleDebug`.
 2. Install it on a rooted MIUI/HyperOS device with LSPosed/libxposed support.
 3. Enable the module.
-4. Confirm the scope is `com.android.systemui`.
+4. Confirm the scopes include `com.android.systemui` and `miui.systemui.plugin`.
 5. Restart SystemUI or reboot.
 6. Check the island outline visually.
 7. Inspect LSPosed/Xposed logs for module-load or hook errors.

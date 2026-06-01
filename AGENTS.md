@@ -13,8 +13,8 @@ Important project files:
   libxposed entry class.
 - `app/src/main/resources/META-INF/xposed/module.prop`: declares libxposed API
   101 metadata and static scope behavior.
-- `app/src/main/resources/META-INF/xposed/scope.list`: limits the module scope
-  to `com.android.systemui`.
+- `app/src/main/resources/META-INF/xposed/scope.list`: scopes the module to
+  `com.android.systemui` and `miui.systemui.plugin`.
 - `app/src/main/AndroidManifest.xml`: Android application metadata used by the
   module APK.
 - `.github/workflows/build.yml`: CI workflow for debug or signed release APKs.
@@ -35,9 +35,10 @@ The Android configuration currently targets SDK 34, requires minSdk 31, and
 uses Java 17 compile options.
 
 ## Runtime Behavior
-The module should only install hooks when the loaded package and process are
-both `com.android.systemui`. Keep that guard intact; broad hooks against
-framework drawing APIs can otherwise affect unrelated processes.
+Host-side outline hooks should only run in the `com.android.systemui` process.
+Plugin-side background/stroke hooks target `miui.systemui.plugin` classes. Keep
+these paths separate; broad hooks against framework drawing APIs can otherwise
+affect unrelated processes.
 
 The current hook strategy is:
 
@@ -53,6 +54,15 @@ The current hook strategy is:
 
 Generated paths are cached by width, height, and smoothing value. Keep the cache
 small because this code runs inside SystemUI.
+
+Plugin-side stroke handling:
+
+- Hook `DynamicIslandBaseContentView.updateMedianLuma(float)` in
+  `miui.systemui.plugin`.
+- Let MIUI draw its original stroke while the island geometry is changing.
+- After the background bounds remain stable for a short debounce window,
+  replace the plugin `GradientDrawable` stroke with a smooth stroke drawable
+  using the same capsule path generator as the host outline hook.
 
 ## Coding Guidelines
 Use the style already present in `XposedInit.kt`: small private helpers, clear
