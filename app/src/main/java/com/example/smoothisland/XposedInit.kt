@@ -325,6 +325,7 @@ class XposedInit : XposedModule() {
     }
 
     private fun onPluginBackgroundGeometryChanged(backgroundView: Any?) {
+        if (backgroundView == null) return
         val state = pluginStrokeStates[backgroundView] ?: return
         state.token++
         restorePluginStroke(backgroundView, state)
