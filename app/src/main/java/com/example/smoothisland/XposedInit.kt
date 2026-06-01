@@ -102,6 +102,7 @@ class XposedInit : XposedModule() {
     private fun installHooks(classLoader: ClassLoader) {
         if (hooksInstalled) return
 
+        hookOutlineRoundRectForDynamicIsland()
         hookTargetOutlineProviders(classLoader)
         hooksInstalled = true
     }
@@ -129,11 +130,74 @@ class XposedInit : XposedModule() {
         }
     }
 
+    private fun hookOutlineRoundRectForDynamicIsland() {
+        val setRoundRectMethod = Outline::class.java.getDeclaredMethod(
+            "setRoundRect",
+            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!,
+            Float::class.javaPrimitiveType!!
+        )
+
+        hook(setRoundRectMethod)
+            .setPriority(XposedInterface.PRIORITY_DEFAULT)
+            .intercept { chain ->
+                val left = chain.getArg(0) as Int
+                val top = chain.getArg(1) as Int
+                val right = chain.getArg(2) as Int
+                val bottom = chain.getArg(3) as Int
+                val radius = chain.getArg(4) as Float
+                val height = bottom - top
+
+                if (
+                    height > 10 &&
+                    abs(radius - (height / 2.0f)) <= 1.0f &&
+                    isDynamicIslandOutlineCall()
+                ) {
+                    val path = createSmoothCapsulePath(left, top, right, bottom)
+                    val outline = chain.thisObject as Outline
+                    outline.setPath(path)
+                    null
+                } else {
+                    chain.proceed()
+                }
+            }
+    }
+
+    private fun isDynamicIslandOutlineCall(): Boolean {
+        var hasDynamicIslandCaller = false
+
+        Thread.currentThread().stackTrace.forEach { frame ->
+            val className = frame.className
+            val lowerClassName = className.lowercase()
+
+            if (EXCLUDED_OUTLINE_CALLERS.any { lowerClassName.contains(it) }) {
+                return false
+            }
+            if (DYNAMIC_ISLAND_CALLERS.any { lowerClassName.contains(it) }) {
+                hasDynamicIslandCaller = true
+            }
+        }
+
+        return hasDynamicIslandCaller
+    }
+
     private companion object {
         const val SYSTEMUI_PKG = "com.android.systemui"
         val TARGET_PROVIDER_CLASSES = listOf(
             "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController\$updateFakeViewOutline\$1",
             "com.android.systemui.statusbar.notification.mediaisland.MiuiIslandMediaViewHolder\$Companion\$create\$1\$1"
+        )
+        val DYNAMIC_ISLAND_CALLERS = listOf(
+            "dynamicisland",
+            "mediaisland"
+        )
+        val EXCLUDED_OUTLINE_CALLERS = listOf(
+            "footerview",
+            "footerviewbutton",
+            "notificationstackscrolllayout",
+            "notif_footer"
         )
         const val SMOOTHING_PROP = "persist.smoothisland.smoothing"
         const val DEFAULT_SMOOTHING = 0.8f
