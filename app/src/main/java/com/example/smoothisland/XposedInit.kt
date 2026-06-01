@@ -102,67 +102,39 @@ class XposedInit : XposedModule() {
     private fun installHooks(classLoader: ClassLoader) {
         if (hooksInstalled) return
 
-        hookOutlineRoundRect()
-        hookTargetOutlineProvider(classLoader)
+        hookTargetOutlineProviders(classLoader)
         hooksInstalled = true
     }
 
-    private fun hookTargetOutlineProvider(classLoader: ClassLoader) {
-        try {
-            val targetProvider = Class.forName(TARGET_PROVIDER_CLASS, false, classLoader)
-            val getOutlineMethod = targetProvider.getDeclaredMethod(
-                "getOutline",
-                View::class.java,
-                Outline::class.java
-            )
+    private fun hookTargetOutlineProviders(classLoader: ClassLoader) {
+        TARGET_PROVIDER_CLASSES.forEach { providerClassName ->
+            try {
+                val targetProvider = Class.forName(providerClassName, false, classLoader)
+                val getOutlineMethod = targetProvider.getDeclaredMethod(
+                    "getOutline",
+                    View::class.java,
+                    Outline::class.java
+                )
 
-            hook(getOutlineMethod)
-                .setPriority(XposedInterface.PRIORITY_DEFAULT)
-                .intercept { chain ->
-                    val result = chain.proceed()
-                    val outline = chain.getArg(1) as Outline
-                    overrideOutlineIfCapsule(outline)
-                    result
-                }
-        } catch (_: Throwable) {
-        }
-    }
-
-    private fun hookOutlineRoundRect() {
-        val setRoundRectMethod = Outline::class.java.getDeclaredMethod(
-            "setRoundRect",
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Float::class.javaPrimitiveType!!
-        )
-
-        hook(setRoundRectMethod)
-            .setPriority(XposedInterface.PRIORITY_DEFAULT)
-            .intercept { chain ->
-                val left = chain.getArg(0) as Int
-                val top = chain.getArg(1) as Int
-                val right = chain.getArg(2) as Int
-                val bottom = chain.getArg(3) as Int
-                val radius = chain.getArg(4) as Float
-                val height = bottom - top
-
-                if (height > 10 && abs(radius - (height / 2.0f)) <= 1.0f) {
-                    val path = createSmoothCapsulePath(left, top, right, bottom)
-                    val outline = chain.thisObject as Outline
-                    outline.setPath(path)
-                    null
-                } else {
-                    chain.proceed()
-                }
+                hook(getOutlineMethod)
+                    .setPriority(XposedInterface.PRIORITY_DEFAULT)
+                    .intercept { chain ->
+                        val result = chain.proceed()
+                        val outline = chain.getArg(1) as Outline
+                        overrideOutlineIfCapsule(outline)
+                        result
+                    }
+            } catch (_: Throwable) {
             }
+        }
     }
 
     private companion object {
         const val SYSTEMUI_PKG = "com.android.systemui"
-        const val TARGET_PROVIDER_CLASS =
-            "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController\$updateFakeViewOutline\$1"
+        val TARGET_PROVIDER_CLASSES = listOf(
+            "com.android.systemui.statusbar.notification.DynamicIslandWindowAnimController\$updateFakeViewOutline\$1",
+            "com.android.systemui.statusbar.notification.mediaisland.MiuiIslandMediaViewHolder\$Companion\$create\$1\$1"
+        )
         const val SMOOTHING_PROP = "persist.smoothisland.smoothing"
         const val DEFAULT_SMOOTHING = 0.8f
         const val MIN_SMOOTHING = 0.0f

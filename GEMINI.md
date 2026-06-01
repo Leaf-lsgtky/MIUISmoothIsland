@@ -1,55 +1,162 @@
 # MIUISmoothIsland
 
-MIUISmoothIsland is an Xposed/LSPosed module designed to force "Smooth Corners" (Squircle/Superellipse) for MIUI's "Super Island" (Dynamic Island) and other SystemUI components. It overrides the standard `Outline.setRoundRect` implementation with a manual cubic Bezier path strategy to achieve a more visually pleasing "HyperOS-style" aesthetic.
+MIUISmoothIsland is an Android LSPosed/libxposed module for MIUI/HyperOS
+SystemUI. Its goal is to make MIUI's Super Island / Dynamic Island capsule use
+a smoother, squircle-like outline instead of the default round-rect arc.
 
-## Project Overview
+The module does not provide a launcher UI. It is installed as an APK, enabled in
+LSPosed, and scoped to `com.android.systemui`.
 
-- **Type:** Android Xposed Module
-- **Core Technology:** Java 17, Gradle 8.2, Android SDK 34 (Upside Down Cake)
-- **Target Process:** `com.android.systemui`
-- **Key Dependencies:** `de.robv.android.xposed:api:82`
+## Current Implementation
 
-### Architecture
+The active entry point is:
 
-The module operates by hooking into the `com.android.systemui` process and intercepting UI-related methods:
+```text
+com.example.smoothisland.XposedInit
+```
 
-1.  **Outline Hook:** Intercepts `android.graphics.Outline.setRoundRect` to replace the default circular arc rounding with a manually calculated Squircle path using `Path.cubicTo`.
-2.  **View Hook:** Hooks `View.onAttachedToWindow` for components containing "Island" or "MiuiStatusIcon" in their class names to ensure `clipToOutline` is enabled and native MIUI smooth corner settings are managed.
+It is declared in:
 
-## Building and Running
+```text
+app/src/main/resources/META-INF/xposed/java_init.list
+```
 
-### Build Commands
+The module uses libxposed API 101 metadata:
 
-- **Build Debug APK:**
-  ```bash
-  ./gradlew assembleDebug
-  ```
-- **Build Release APK:**
-  ```bash
-  ./gradlew assembleRelease
-  ```
-- **Clean Project:**
-  ```bash
-  ./gradlew clean
-  ```
+```text
+app/src/main/resources/META-INF/xposed/module.prop
+```
 
-### Installation & Deployment
+The static scope is:
 
-1.  Build the APK using the commands above.
-2.  Install the APK on a rooted MIUI device with LSPosed installed.
-3.  Open the LSPosed Manager and enable the **MIUI Super Island Smooth Corner** module.
-4.  Ensure the scope is set to **System UI** (`com.android.systemui`).
-5.  Restart System UI or the device to apply changes.
+```text
+app/src/main/resources/META-INF/xposed/scope.list
+```
 
-## Development Conventions
+which currently contains only:
 
-- **Entry Point:** `com.example.smoothisland.XposedInit` (defined in `assets/xposed_init`).
-- **Hooking Strategy:** Prefer `beforeHookedMethod` for replacing logic and `afterHookedMethod` for modifying state.
-- **Path Calculation:** The `createSmoothRectPath` method uses a curvature coefficient `c = r * 0.72f` to approximate a squircle.
-- **Logging:** Use `XposedBridge.log` with the `SmoothIsland: ` prefix for debugging.
+```text
+com.android.systemui
+```
 
-## Key Files
+## Hooking Model
 
-- `app/src/main/java/com/example/smoothisland/XposedInit.java`: Main logic for Xposed hooks and path generation.
-- `analysis_report_miui_features.md`: Detailed research on MIUI's Dynamic Island implementation and why native smooth corners often fail.
-- `app/src/main/AndroidManifest.xml`: Module metadata and LSPosed scope configuration.
+`XposedInit.kt` installs hooks only when both the loaded package and loaded
+process are `com.android.systemui`.
+
+The module currently has two hook paths:
+
+1. `android.graphics.Outline.setRoundRect(int, int, int, int, float)`
+
+   When the requested outline is capsule-like, meaning the radius is close to
+   half of the view height, the module replaces the standard round rect with a
+   custom `Path`.
+
+2. `DynamicIslandWindowAnimController$updateFakeViewOutline$1.getOutline(...)`
+
+   When this MIUI/HyperOS class is available, the module lets the original
+   method run first, then rewrites the returned capsule outline into a smooth
+   capsule path.
+
+Both paths use the same shape-generation code.
+
+## Smooth Capsule Generation
+
+Smooth paths are generated with:
+
+```text
+androidx.graphics.shapes.RoundedPolygon.pill(...).toPath()
+```
+
+The smoothing value is read from the system property:
+
+```text
+persist.smoothisland.smoothing
+```
+
+Behavior:
+
+- Default value: `0.8`
+- Minimum value: `0.0`
+- Maximum value: `1.0`
+- Invalid values fall back to the default
+
+The generated base capsule paths are cached by width, height, and smoothing
+value. The cache is capped at 32 entries.
+
+## Why This Exists
+
+The research notes in `analysis_report_miui_features.md` describe the original
+problem:
+
+- MIUI/HyperOS has lower-level smooth-corner support.
+- Super Island visuals often rely on ordinary `GradientDrawable` and
+  `Outline`-based clipping.
+- Those paths can fall back to normal circular arcs instead of MIUI smooth
+  corners.
+
+This module bypasses that gap by replacing capsule outlines directly inside
+SystemUI.
+
+## Build Environment
+
+This repository does not include `gradlew`. Use a local Gradle installation.
+The GitHub Actions workflow uses Gradle 9.1.0 and JDK 17.
+
+Project configuration:
+
+- Android Gradle Plugin: `9.0.1`
+- compileSdk: `34`
+- minSdk: `31`
+- targetSdk: `34`
+- Java compile target: `17`
+- libxposed API dependency: `io.github.libxposed:api:101.0.1`
+- shape dependency: `androidx.graphics:graphics-shapes:1.1.0`
+
+Common commands:
+
+```bash
+gradle assembleDebug
+gradle assembleRelease
+gradle clean
+```
+
+Release signing is optional and controlled by these environment variables:
+
+```text
+SIGNING_KEYSTORE_PATH
+ALIAS
+KEY_PASSWORD
+KEYSTORE_PASSWORD
+```
+
+## Installation And Validation
+
+1. Build the APK with `gradle assembleDebug`.
+2. Install it on a rooted MIUI/HyperOS device with LSPosed/libxposed support.
+3. Enable the module.
+4. Confirm the scope is `com.android.systemui`.
+5. Restart SystemUI or reboot.
+6. Check the island outline visually.
+7. Inspect LSPosed/Xposed logs for module-load or hook errors.
+
+## Important Files
+
+- `app/src/main/java/com/example/smoothisland/XposedInit.kt`: hook entry point
+  and smooth capsule path generation.
+- `app/src/main/resources/META-INF/xposed/java_init.list`: libxposed entry
+  declaration.
+- `app/src/main/resources/META-INF/xposed/module.prop`: libxposed module
+  metadata.
+- `app/src/main/resources/META-INF/xposed/scope.list`: static package scope.
+- `app/proguard-rules.pro`: keeps the entry point and `XposedModule`
+  subclasses for release builds.
+- `.github/workflows/build.yml`: debug/release APK build workflow.
+- `analysis_report_miui_features.md`: background analysis of MIUI Dynamic
+  Island smooth-corner behavior.
+
+## Known Documentation Notes
+
+Older notes may mention legacy Xposed APIs, Java source names, or
+`assets/xposed_init`. The current repository uses Kotlin source and libxposed
+metadata under `META-INF/xposed/`.
